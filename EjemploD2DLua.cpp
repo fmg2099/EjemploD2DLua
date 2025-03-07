@@ -1,12 +1,13 @@
-
+ï»¿
 #include <iostream>
 #include "Windows.h"
 #include "D2D1.h"
 #include "D2D1Helper.h"
 #include "lua.hpp"
+#include <time.h>
 #pragma comment(lib, "d2d1")
-
-
+#include <dwrite.h> //para texto
+#pragma comment(lib, "Dwrite.lib")
 
 
 //variables de windows api
@@ -25,9 +26,16 @@ ID2D1Factory* d2dFactory = NULL;
 ID2D1HwndRenderTarget* renderTarget;
 ID2D1SolidColorBrush* brush;
 D2D1_COLOR_F clearColor;
+IDWriteFactory* writeFactory;
+IDWriteTextFormat* textFormat;
+
 HRESULT CreateGraphicsResources();
 void DiscardGraphicsResources();
 void CalculateLayout();
+
+
+clock_t lastTime = 0;
+clock_t deltaTime = 0;
 
 //////////////////////////////////////////////////////////////////////////
 // Funciones de ayuda
@@ -116,6 +124,15 @@ int DrawLine(lua_State* L)
 	return 0;
 }
 
+//int _drawText()
+//{
+//	if (renderTarget != NULL)
+//	{
+//		renderTarget->DrawTextW(L"Hello, World!", 13, textFormat, D2D1::RectF(0, 0, 200, 100), brush);
+//	}
+//	return 0;
+//}
+
 void luaDraw(lua_State* L, float dt)
 {
 	lua_getglobal(L, "Draw");
@@ -151,16 +168,13 @@ int lua_mymodule(lua_State* L)
 }
 
 
-
-
 int main(int argc, char** argv)
 {
-	Log(L"hólá múndö");
+	Log(L"hÃ³lÃ¡ mÃºndÃ¶");
 
 	//////////////////////////////////////////////////////////////////////////
 	// Inicializacion de la ventana
 	//////////////////////////////////////////////////////////////////////////
-
 	hInstance = GetModuleHandle(NULL);
 	LPCWSTR szTitle = L"Ventana";
 	LPCWSTR szWindowClass = L"VentanaClass";
@@ -203,6 +217,25 @@ int main(int argc, char** argv)
 	//////////////////////////////////////////////////////////////////////////
 	// Inicializacion de direct2D - se hace en WM_CREATE
 	//////////////////////////////////////////////////////////////////////////
+	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, 
+		__uuidof(IDWriteFactory), 
+		reinterpret_cast<IUnknown**>(&writeFactory));
+	if (SUCCEEDED(hr))
+	{
+		Log(L"IDWriteFactory creado");
+		hr = writeFactory->CreateTextFormat(L"Verdana", 
+			NULL, DWRITE_FONT_WEIGHT_NORMAL, 
+			DWRITE_FONT_STYLE_NORMAL, 
+			DWRITE_FONT_STRETCH_NORMAL, 
+			24.0f, L"en-us", &textFormat);
+	}
+	if (SUCCEEDED(hr))
+	{
+		Log(L"IDWriteTextFormat creado. Ya se puede usar para DrawText");
+		textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+		textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+	}
+
 	
 
 	//////////////////////////////////////////////////////////////////////////
@@ -212,8 +245,6 @@ int main(int argc, char** argv)
 	lua_State* L = luaL_newstate();
 	//guardar el estado de lua para poder usarlo en el wndproc
 	SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(L));
-
-	ShowWindow(hWnd, SW_SHOW);
 
 	luaL_openlibs(L);
 	luaL_requiref(L, "SimpleDraw", lua_mymodule, 1); //SimpleDraw es el nombre de la biblioteca a importar en lua
@@ -229,13 +260,12 @@ int main(int argc, char** argv)
 		Log(L"Lua file loaded");
 	}
 
-	luaDraw(L, 0.0f);
+	//luaDraw(L, 0.0f);
 
 
 	//////////////////////////////////////////////////////////////////////////
 	// Ciclo principal
 	//////////////////////////////////////////////////////////////////////////
-
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0))
 	{
@@ -254,6 +284,7 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		case WM_CREATE:
 		{
+			Log(L"WM_CREATE");
 			//cornflower blue para recordar xna
 			clearColor = D2D1::ColorF(D2D1::ColorF::CornflowerBlue);
 			if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2dFactory)))
@@ -272,7 +303,15 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case WM_TIMER:
 		{
+			clock_t timeStart = clock();
+			deltaTime = timeStart-lastTime;
 			InvalidateRect(_hWnd, NULL, FALSE);
+			
+			char buffer[40];
+			//wsprintfW(buffer, L"Frame time: %f", deltaTime/CLOCKS_PER_SEC);
+			sprintf_s(buffer, "Frame time: %f", deltaTime / (float)CLOCKS_PER_SEC);
+			Log(buffer);
+			lastTime = timeStart;
 		} break;
 
 		case WM_KEYDOWN:
@@ -284,8 +323,7 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				closeApp(_hWnd);
 			}
-		}
-			break;
+		}break;
 		case WM_PAINT:
 		{
 			PAINTSTRUCT ps;
@@ -295,10 +333,17 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (SUCCEEDED(hr))
 			{
 				renderTarget->BeginDraw();
+				
+
 				if (L != NULL)
-					luaDraw(L, 0.0f);
+					luaDraw(L, 0.0f); //deltatime calculado
 				else
 					Log(L"Lua state is null");
+
+				renderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 0, 0), &brush);
+				
+				if (textFormat != NULL)
+					renderTarget->DrawTextW(L"Hello, World!", 13, textFormat, D2D1::RectF(0, 0, 200, 100), brush);
 				renderTarget->EndDraw();
 			}			
 			EndPaint(_hWnd, &ps);
@@ -329,7 +374,8 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 void closeApp(HWND hWnd)
 {
-	DestroyWindow(FindWindowW(NULL, L"Ventana"));
+	//DestroyWindow(FindWindowW(NULL, L"Ventana"));
+	DestroyWindow(hWnd);
 }
 
 HRESULT CreateGraphicsResources()
