@@ -21,6 +21,9 @@ enum EWindowStyle {
 	aero_borderless = WS_POPUP | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX,
 };
 
+int windowWidth = 800;
+int windowHeight = 600;
+
 //Cosas de Direct2D
 ID2D1Factory* d2dFactory = NULL;
 ID2D1HwndRenderTarget* renderTarget;
@@ -81,7 +84,7 @@ int SetBrushColor(lua_State* L)
 		int r = (int)lua_tonumber(L, 1);
 		int g = (int)lua_tonumber(L, 2);
 		int b = (int)lua_tonumber(L, 3);
-
+		//todo deberia ser set o algo asi, porque tambien cambia el color de figuras previas
 		HRESULT hr = renderTarget->CreateSolidColorBrush(D2D1::ColorF(r/(float)255, g/ (float)255, b/ (float)255), &brush);
 	}
 	return 0;
@@ -170,8 +173,6 @@ int lua_mymodule(lua_State* L)
 
 int main(int argc, char** argv)
 {
-	Log(L"hólá múndö");
-
 	//////////////////////////////////////////////////////////////////////////
 	// Inicializacion de la ventana
 	//////////////////////////////////////////////////////////////////////////
@@ -198,8 +199,6 @@ int main(int argc, char** argv)
 
 	int desktopWidth = GetSystemMetrics(SM_CXSCREEN);
 	int desktopHeight = GetSystemMetrics(SM_CYSCREEN);
-	int windowWidth = 800;
-	int windowHeight = 600;
 
 	hWnd = CreateWindowW(szWindowClass,
 		szTitle,
@@ -334,16 +333,39 @@ LRESULT CALLBACK WndProc(HWND _hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				renderTarget->BeginDraw();
 				
+				//prueba de dibujo
 
+				//elegante azul oscuro como fondo
+				renderTarget->Clear(D2D1::ColorF(20 / (float)255, 20 / (float)255, 38 / (float)255));
+				if (textFormat != NULL)
+					renderTarget->DrawTextW(L"hola mundo", 10, textFormat, D2D1::RectF(0, 0, 200, 100), brush);
+
+				ID2D1SolidColorBrush* whitebrush;
+				renderTarget->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1), &whitebrush);
+
+				ID2D1SolidColorBrush* redbrush;
+				renderTarget->CreateSolidColorBrush(D2D1::ColorF(1, 0, 0), &redbrush);
+
+
+				//dibujar los ejes cartesianos
+				int pad = 50;
+				//llora si no hacemos esta comprobacion
+				if (whitebrush != NULL)
+				{
+					renderTarget->DrawLine(D2D1::Point2F(pad, windowHeight - pad), D2D1::Point2F(windowWidth - pad, windowHeight - pad), whitebrush);
+					renderTarget->DrawLine(D2D1::Point2F(pad, pad), D2D1::Point2F(pad, windowHeight - pad), whitebrush);
+				}
+					
+				
+				
+				
+				//draw desde main.lua
 				if (L != NULL)
 					luaDraw(L, 0.0f); //deltatime calculado
 				else
 					Log(L"Lua state is null");
 
-				renderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 0, 0), &brush);
-				
-				if (textFormat != NULL)
-					renderTarget->DrawTextW(L"Hello, World!", 13, textFormat, D2D1::RectF(0, 0, 200, 100), brush);
+
 				renderTarget->EndDraw();
 			}			
 			EndPaint(_hWnd, &ps);
@@ -412,10 +434,6 @@ void CalculateLayout()
 	if (renderTarget != NULL)
 	{
 		D2D1_SIZE_F size = renderTarget->GetSize();
-		const float x = size.width / 2;
-		const float y = size.height / 2;
-		const float radius = min(x, y);
-		//ellipse = D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius);
 	}
 }
 
